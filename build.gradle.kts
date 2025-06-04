@@ -19,6 +19,7 @@ repositories {
     mavenCentral()
     maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
     maven { url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/") }
+    maven { url = uri("https://maven.diffblue.com/snapshot") }
     gradlePluginPortal()
 }
 
@@ -56,6 +57,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.2")
     implementation("io.github.java-diff-utils:java-diff-utils:4.11")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     runtimeOnly("org.slf4j:slf4j-simple:1.7.30")
 
     testImplementation("org.junit.jupiter:junit-jupiter:latest.release")
