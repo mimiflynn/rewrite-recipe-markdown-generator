@@ -16,7 +16,6 @@ org.openrewrite.meta:rewrite-analysis
 org.openrewrite.recipe:rewrite-ai-search
 org.openrewrite.recipe:rewrite-android
 org.openrewrite.recipe:rewrite-apache
-
 org.openrewrite.recipe:rewrite-circleci
 org.openrewrite.recipe:rewrite-codemods
 org.openrewrite.recipe:rewrite-codemods-ng
@@ -24,7 +23,6 @@ org.openrewrite.recipe:rewrite-compiled-analysis
 org.openrewrite.recipe:rewrite-comprehension
 org.openrewrite.recipe:rewrite-concourse
 org.openrewrite.recipe:rewrite-cucumber-jvm
-
 org.openrewrite.recipe:rewrite-docker
 org.openrewrite.recipe:rewrite-dotnet
 org.openrewrite.recipe:rewrite-feature-flags
@@ -54,6 +52,5 @@ org.openrewrite.recipe:rewrite-struts
 org.openrewrite.recipe:rewrite-terraform
 org.openrewrite.recipe:rewrite-testing-frameworks
 org.openrewrite.recipe:rewrite-third-party
-
 io.moderne.recipe:rewrite-hibernate
 io.moderne.recipe:rewrite-spring

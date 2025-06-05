@@ -65,7 +65,6 @@ dependencies {
 
     "recipe"(platform("io.moderne.recipe:moderne-recipe-bom:$rewriteVersion"))
 
-
     recipeDeps.forEach { dep ->
         "recipe"(dep)
     }
