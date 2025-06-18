@@ -596,6 +596,7 @@ class RecipeMarkdownGenerator : Runnable {
 
                     val formattedDisplayName = recipe.displayName
                         .replace("<script>", "`<script>`")
+                        .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
                     writeln("* [${formattedDisplayName}](../${recipePath}.md)")
                 }
@@ -1020,6 +1021,7 @@ class RecipeMarkdownGenerator : Runnable {
                             val formattedDisplayName = recipe.displayName
                                 .replace("<script>", "\\<script\\>")
                                 .replace("<p>", "< p >")
+                                .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
                             val recipePathToDocusaurusRenamedPath: Map<String, String> = mapOf(
                                 "org.openrewrite.java.testing.assertj.Assertj" to "assertj-best-practices",
@@ -1051,6 +1053,7 @@ class RecipeMarkdownGenerator : Runnable {
                             val formattedDisplayName = recipe.displayName
                                 .replace("<script>", "\\<script\\>")
                                 .replace("<p>", "< p >")
+                                .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
                             // Anything except a relative link ending in .md will be mangled.
                             // If you touch this line double check that it works when imported into gitbook
@@ -1090,6 +1093,7 @@ class RecipeMarkdownGenerator : Runnable {
                         val formattedDisplayName = recipe.displayName
                             .replace("<", "\\<")
                             .replace(">", "\\>")
+                            .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
                         writeln("* [${formattedDisplayName}](./${recipeSimpleName}.md)")
                     }
@@ -1118,14 +1122,21 @@ class RecipeMarkdownGenerator : Runnable {
             return
         }
 
-        val sidebarFormattedName = recipeDescriptor.displayName
+        val editionSuffix = when (recipeDescriptor.name) {
+            "io.moderne.java.spring.boot3.UpgradeSpringBoot_3_4" -> " (Moderne Edition)"
+            "org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_4" -> " (Community Edition)"
+            else -> ""
+        }
+
+        val sidebarFormattedName = (recipeDescriptor.displayName + editionSuffix)
             .replace("`", "")
             .replace("\"", "\\\"")
             .replace("<script>", "<script >")
             .replace("<p>", "< p >")
+            .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Remove URLs from sidebar label
             .trim()
 
-        val formattedRecipeTitle = recipeDescriptor?.displayName
+        val formattedRecipeTitle = (recipeDescriptor?.displayName + editionSuffix)
             ?.replace("<", "&lt;")
             ?.replace(">", "&gt;")
             ?.replace("`&lt;", "`<")
@@ -1675,6 +1686,7 @@ import TabItem from '@theme/TabItem';
                 val formattedRecipeDisplayName = recipe.displayName
                     .replace("<p>", "< p >")
                     .replace("<script>", "//<script//>")
+                    .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
                 if (recipesToIgnore.contains(recipe.name)) {
                     continue
@@ -2294,11 +2306,16 @@ $cliSnippet
         }
 
         private fun getRecipePath(recipe: RecipeDescriptor): String =
-        // Docusaurus expects that if a file is called "assertj" inside of the folder "assertj" that it's the
-        // README for said folder. Due to how generic we've made this recipe name, we need to change it for the
+            // Docusaurus expects that if a file is called "assertj" inside of the folder "assertj" that it's the
+            // README for said folder. Due to how generic we've made this recipe name, we need to change it for the
             // docs so that they parse correctly.
             if (recipePathToDocusaurusRenamedPath.containsKey(recipe.name)) {
                 recipePathToDocusaurusRenamedPath[recipe.name]!!
+            } else if (recipe.name == "io.moderne.java.spring.boot3.UpgradeSpringBoot_3_4") {
+                // The spring boot recipes clashes with one another so let's make them distinct
+                "java/spring/boot3/upgradespringboot_3_4-moderne-edition"
+            } else if (recipe.name == "org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_4") {
+                "java/spring/boot3/upgradespringboot_3_4-community-edition"
             } else if (recipe.name.startsWith("org.openrewrite")) {
                 // If the recipe path only has two periods, it's part of the core recipes and should be adjusted accordingly.
                 if (recipe.name.count { it == '.' } == 2) {
