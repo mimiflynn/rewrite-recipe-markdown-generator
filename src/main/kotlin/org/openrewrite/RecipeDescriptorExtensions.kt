@@ -11,7 +11,7 @@ type: specs.openrewrite.org/v1beta/recipe
 name: $name
 displayName: $displayName
 description: |
-  ${description?.replace("\n", "\n  ")?.replace("```. [Source]", "```\n  [Source]") ?: ""}
+  ${description?.replace("\n", "\n  ")?.replace("```. [Source]", "```\n  [Source]\n") ?: ""}
     """.trimIndent())
     if (tags.isNotEmpty()) {
         s.appendLine("tags:")
