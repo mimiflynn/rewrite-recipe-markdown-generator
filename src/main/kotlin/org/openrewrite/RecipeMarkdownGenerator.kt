@@ -256,32 +256,8 @@ class RecipeMarkdownGenerator : Runnable {
                 recipeDescription = ""
             }
 
-            val docBaseUrl = "https://docs.openrewrite.org/recipes/"
-
             // Changes something like org.openrewrite.circleci.InstallOrb to https://docs.openrewrite.org/recipes/circleci/installorb
-            var docLink = docBaseUrl + recipeDescriptor.name.lowercase(Locale.getDefault())
-                .removePrefix("org.openrewrite.")
-                .removePrefix("io.moderne.")
-                .replace('.', '/')
-                .replace(
-                    "$",
-                    "usd"
-                ) // needed for refaster templates + gitbook as we have started using $ in our recipe descriptors :(
-
-            // Some of our recipes fall in a "core" category. These do not have a package like other recipes.
-            // For example: org.openrewrite.recipeName
-            // In this case, we want the generated link to include the /core/ directory.
-            if (recipeDescriptor.name.count { it == '.' } == 2) {
-                docLink = docBaseUrl + "core/" + recipeDescriptor.name.lowercase(Locale.getDefault())
-                    .removePrefix("org.openrewrite.")
-                    .removePrefix("io.moderne.")
-                    .replace('.', '/')
-                    .replace(
-                        "$",
-                        "usd"
-                    ) // needed for refaster templates + gitbook as we have started using $ in our recipe descriptors :(
-            }
-
+            val docLink = "https://docs.openrewrite.org/recipes/" + getRecipePath(recipeDescriptor)
             val recipeSource = recipeDescriptor.source.toString()
             var isImperative = true
 
@@ -1089,13 +1065,12 @@ class RecipeMarkdownGenerator : Runnable {
                     newLine()
 
                     for (recipe in recipes) {
-                        val recipeSimpleName = recipe.name.substring(recipe.name.lastIndexOf('.') + 1).lowercase()
                         val formattedDisplayName = recipe.displayName
                             .replace("<", "\\<")
                             .replace(">", "\\>")
                             .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
-
-                        writeln("* [${formattedDisplayName}](./${recipeSimpleName}.md)")
+                        val relativePath = getRecipePath(recipe).substringAfterLast('/')
+                        writeln("* [${formattedDisplayName}](./$relativePath.md)")
                     }
                 }
 
@@ -1849,7 +1824,7 @@ import TabItem from '@theme/TabItem';
             1. Add the following to your `build.gradle` file:
             ```groovy title="build.gradle"
             plugins {
-                id("org.openrewrite.rewrite") version("{{VERSION_REWRITE_GRADLE_PLUGIN}}")
+                id("org.openrewrite.rewrite") version("latest.release")
             }
             
             rewrite {
@@ -1932,7 +1907,7 @@ $cliSnippet
 
             ```groovy title="build.gradle"
             plugins {
-                id("org.openrewrite.rewrite") version("{{VERSION_REWRITE_GRADLE_PLUGIN}}")
+                id("org.openrewrite.rewrite") version("latest.release")
             }
             
             rewrite {
@@ -2031,7 +2006,7 @@ $cliSnippet
 
             ```groovy title="build.gradle"
             plugins {
-                id("org.openrewrite.rewrite") version("{{VERSION_REWRITE_GRADLE_PLUGIN}}")
+                id("org.openrewrite.rewrite") version("latest.release")
             }
             
             rewrite {
@@ -2162,7 +2137,7 @@ $cliSnippet
 
             ```groovy title="build.gradle"
             plugins {
-                id("org.openrewrite.rewrite") version("{{VERSION_REWRITE_GRADLE_PLUGIN}}")
+                id("org.openrewrite.rewrite") version("latest.release")
             }
             
             rewrite {
@@ -2390,9 +2365,10 @@ $cliSnippet
             )
 
             for (recipe in recipesWithDataTables) {
-                val recipePath = recipePath(recipe.name)
+                val formattedDisplayName = recipe.displayName
+                        .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1") // Removes URLs from the displayName
 
-                writeln("### [${recipe.displayName}](../${recipePath}.md)\n ")
+                writeln("### [${formattedDisplayName}](../${getRecipePath(recipe)}.md)\n ")
                 writeln("_${recipe.name}_\n")
                 writeln("${recipe.description}\n")
                 writeln("#### Data tables:\n")
@@ -2428,27 +2404,14 @@ $cliSnippet
             )
 
             for (recipe in scanningRecipes) {
-                val recipePath = recipePath(recipe.name)
                 writeln(
                     """
-                    ### [${recipe.displayName}](../${recipePath}.md)
+                    ### [${recipe.displayName}](../${getRecipePath(recipe.descriptor)}.md)
                     """.trimIndent()
                 )
                 writeln("_${recipe.name}_\n")
                 writeln("${recipe.description}\n")
             }
         }
-    }
-
-    private fun recipePath(name: String): String {
-        if (name.count { it == '.' } == 2 &&
-            name.contains("org.openrewrite.")) {
-            return "recipes/core/" + name.removePrefix("org.openrewrite.").lowercase()
-        } else if (name.contains("io.moderne.ai")) {
-            return "recipes/ai/" + name.removePrefix("io.moderne.ai.").replace(".", "/").lowercase()
-        } else if (name.contains("io.moderne")) {
-            return "recipes/" + name.removePrefix("io.moderne.").replace(".", "/").lowercase()
-        }
-        return "recipes/" + name.removePrefix("org.openrewrite.").replace(".", "/").lowercase()
     }
 }
