@@ -17,8 +17,7 @@ version = "1.0-SNAPSHOT"
 repositories {
     mavenLocal()
     mavenCentral()
-    maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
-    maven { url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/") }
+    maven { url = uri("https://central.sonatype.org/content/repositories/snapshots/") }
     maven { url = uri("https://maven.diffblue.com/snapshot") }
     gradlePluginPortal()
 }
@@ -58,9 +57,10 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.2")
     implementation("io.github.java-diff-utils:java-diff-utils:4.11")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     runtimeOnly("org.slf4j:slf4j-simple:1.7.30")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:latest.release")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.+")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     "recipe"(platform("io.moderne.recipe:moderne-recipe-bom:$rewriteVersion"))
@@ -98,7 +98,6 @@ tasks.named<JavaExec>("run").configure {
         // Additional modules whose versions we want to show, but not (yet) their recipes
         dependencies {
             "recipe"("org.openrewrite:rewrite-cobol:$rewriteVersion")
-            "recipe"("org.openrewrite:rewrite-csharp:$rewriteVersion")
             "recipe"("org.openrewrite:rewrite-javascript:$rewriteVersion")
             "recipe"("org.openrewrite:rewrite-polyglot:$rewriteVersion")
             "recipe"("org.openrewrite:rewrite-python:$rewriteVersion")
@@ -126,9 +125,7 @@ tasks.named<JavaExec>("run").configure {
         latestVersion("org.openrewrite.recipe:rewrite-recipe-bom:latest.release"),
         latestVersion("io.moderne.recipe:moderne-recipe-bom:latest.release"),
         latestVersion("org.openrewrite:plugin:latest.release"),
-        latestVersion("org.openrewrite.maven:rewrite-maven-plugin:latest.release"),
-        deployType,
-        diffFileName
+        latestVersion("org.openrewrite.maven:rewrite-maven-plugin:latest.release")
     )
     if (latestVersionsOnly) {
         arguments.add("--latest-versions-only")
