@@ -1,15 +1,76 @@
 ![Logo](https://github.com/openrewrite/rewrite/raw/main/doc/logo-oss.png)
 
+# Rewrite Recipe Markdown Generator
+
 ## What is this?
 
 This project generates recipe documentation in markdown format for all recipes on the classpath. It produces two separate sets of output:
 
-* **OpenRewrite docs** (`build/docs/`) - Open-source recipes only, for [docs.openrewrite.org](https://docs.openrewrite.org)
-* **Moderne docs** (`build/moderne-docs/`) - All recipes including proprietary, for [docs.moderne.io](https://docs.moderne.io)
+* **OpenRewrite docs** (`build/docs/`) — Open-source recipes only, for [docs.openrewrite.org](https://docs.openrewrite.org)
+* **Moderne docs** (`build/moderne-docs/`) — All recipes including proprietary, for [docs.moderne.io](https://docs.moderne.io)
 
 Proprietary recipes (those with a `Proprietary` license or loaded via TypeScript/Python) are written only to the Moderne docs output. Open-source recipes are written to both.
 
-### Changelog
+## Project structure
+
+```
+.
+├── build.gradle.kts              # Build configuration (Kotlin DSL)
+├── settings.gradle.kts           # Gradle settings
+├── gradle.properties             # Gradle properties
+├── suppressions.xml              # OWASP dependency-check suppressions
+├── src/
+│   ├── main/
+│   │   ├── kotlin/org/openrewrite/
+│   │   │   ├── RecipeMarkdownGenerator.kt   # Main entry point
+│   │   │   ├── RecipeMarkdownWriter.kt      # Writes markdown for individual recipes
+│   │   │   ├── RecipeLoader.kt              # Loads JVM recipes from classpath
+│   │   │   ├── TypeScriptRecipeLoader.kt    # Loads TS recipes via RPC
+│   │   │   ├── PythonRecipeLoader.kt        # Loads Python recipes via RPC
+│   │   │   ├── CSharpRecipeLoader.kt        # Loads C# recipes via RPC
+│   │   │   ├── CategoryWriter.kt            # Writes category index pages
+│   │   │   ├── ChangelogWriter.kt           # Generates changelog from diffs
+│   │   │   ├── VersionWriter.kt             # Writes version reference files
+│   │   │   ├── ListsOfRecipesWriter.kt      # Writes recipe list pages
+│   │   │   ├── RedirectWriter.kt            # Generates redirect mappings
+│   │   │   ├── RecipeJsonExporter.kt        # Exports recipe data as JSON
+│   │   │   ├── TemplateRenderer.kt          # Renders markdown templates
+│   │   │   ├── RecipeOrigin.kt              # Determines recipe source/origin
+│   │   │   ├── RecipeOption.kt              # Models recipe options
+│   │   │   ├── MarkdownRecipeDescriptor.kt  # Recipe descriptor model
+│   │   │   ├── MarkdownRecipeArtifact.kt    # Recipe artifact model
+│   │   │   ├── RecipeDescriptorExtensions.kt# Extension functions
+│   │   │   ├── Licenses.kt                  # License classification
+│   │   │   ├── CliVersion.kt                # CLI version utilities
+│   │   │   └── config/                      # Configuration classes
+│   │   │       ├── GeneratorConfig.kt
+│   │   │       ├── BrandingConfig.kt
+│   │   │       ├── Ecosystem.kt
+│   │   │       └── RecipePackageConfig.kt
+│   │   └── resources/
+│   │       └── recipeDescriptors.yml        # Cached descriptors for changelog diffing
+│   └── test/kotlin/org/openrewrite/         # Unit tests
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                           # Nightly latest-versions generation
+│   │   ├── pr.yml                           # PR build & test
+│   │   └── test.yml                         # Push/PR test workflow
+│   └── copilot-instructions.md              # AI agent instructions
+└── .claude/settings.json                    # Claude Code permissions
+```
+
+## Technology stack
+
+| Component | Technology |
+|-----------|-----------|
+| Language | Kotlin 2.3.0 (JVM target 21) |
+| Build tool | Gradle (Kotlin DSL) |
+| Framework | Picocli (CLI), Kotlin Coroutines |
+| Dependencies | Jackson (YAML/Kotlin), OkHttp, java-diff-utils |
+| Testing | JUnit 5, AssertJ |
+| Security | OWASP dependency-check |
+
+## Changelog
 
 This project also builds up a CHANGELOG to track what has changed over time. The way this works is that, every time
 this project is run, it looks in the `/src/main/resources` directory for a `recipeDescriptors.yml` file.
@@ -24,8 +85,8 @@ in the OpenRewrite docs.
 
 Doc updates to the OpenRewrite docs and Moderne docs are normally driven by scheduled GitHub Actions in the respective repos, not by humans running this generator locally:
 
-* [`openrewrite/rewrite-docs`](https://github.com/openrewrite/rewrite-docs/blob/master/.github/workflows/update-docs.yml) - runs nightly, checks out this repo, runs `./gradlew run`, copies the OpenRewrite outputs into `rewrite-docs`, commits, and pushes.
-* [`moderneinc/moderne-docs`](https://github.com/moderneinc/moderne-docs/blob/main/.github/workflows/update-docs.yml) - runs nightly, same shape, but also installs Python and .NET so it can load all RPC-backed recipes (see [Prerequisites](#prerequisites) below).
+* [`openrewrite/rewrite-docs`](https://github.com/openrewrite/rewrite-docs/blob/master/.github/workflows/update-docs.yml) — runs nightly, checks out this repo, runs `./gradlew run`, copies the OpenRewrite outputs into `rewrite-docs`, commits, and pushes.
+* [`moderneinc/moderne-docs`](https://github.com/moderneinc/moderne-docs/blob/main/.github/workflows/update-docs.yml) — runs nightly, same shape, but also installs Python and .NET so it can load all RPC-backed recipes (see [Prerequisites](#prerequisites) below).
 
 Both workflows default to `-PlatestVersionsOnly=true`, which only refreshes the latest-versions files. To regenerate the full recipe catalog, trigger the workflow manually via `workflow_dispatch` with that input unchecked.
 
@@ -43,6 +104,19 @@ The generator loads TypeScript, Python, and C# recipes by spawning external RPC 
 * **.NET SDK** — C# recipes (`recipes-code-quality`, `recipes-migrate-dotnet`, `recipes-tunit`, `recipes-csharp-core`)
 
 If a toolchain is missing, the corresponding loader prints a warning and skips those recipes. The build still succeeds, so a local `./gradlew run` without all four toolchains silently produces incomplete docs. Most contributors don't have all four installed — if you need a complete regeneration, trigger the scheduled workflows above rather than running locally.
+
+### Build and test
+
+```shell
+# Compile the project
+./gradlew compileKotlin
+
+# Run tests
+./gradlew test
+
+# Compile and test together
+./gradlew compileKotlin compileTestKotlin test
+```
 
 ### Generate all docs
 
@@ -111,3 +185,7 @@ git add src/main/resources/recipeDescriptors.yml
 git commit -m "Update recipeDescriptors.yml"
 git push
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
