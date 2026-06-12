@@ -1,0 +1,15 @@
+<TabItem value="nuget" label="NuGet">
+
+1. Install the recipe package:
+
+```shell title="shell"
+dotnet add package {{packageName}}
+```
+
+2. Run the recipe using the {{cliName}}:
+
+```shell title="shell"
+mod run . --recipe {{trimmedRecipeName}}{{cliOptions}}
+```
+
+</TabItem>

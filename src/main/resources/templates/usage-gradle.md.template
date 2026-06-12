@@ -1,0 +1,27 @@
+<TabItem value="gradle" label="Gradle">
+
+1. Add the following to your `build.gradle` file:
+
+```groovy title="build.gradle"
+plugins {
+    id("org.openrewrite.rewrite") version("latest.release")
+}
+
+rewrite {
+    activeRecipe("{{recipeName}}")
+    setExportDatatables(true)
+}
+
+repositories {
+    mavenCentral()
+}
+{{#requiresDependency}}
+
+dependencies {
+    rewrite("{{groupId}}:{{artifactId}}:{{versionPlaceholder}}")
+}
+{{/requiresDependency}}
+```
+
+2. Run `gradle rewriteRun` to run the recipe.
+</TabItem>

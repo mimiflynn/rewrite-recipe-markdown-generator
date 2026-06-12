@@ -1,0 +1,13 @@
+<TabItem value="moderne-cli" label="{{cliName}}">
+
+You will need to have configured the [{{cliName}}]({{cliDocsUrl}}) on your machine before you can run the following command.
+
+```shell title="shell"
+mod run . --recipe {{trimmedRecipeName}}{{cliOptions}}
+```
+
+If the recipe is not available locally, then you can install it using:
+```shell
+mod config recipes jar install {{groupId}}:{{artifactId}}:{{versionPlaceholder}}
+```
+</TabItem>

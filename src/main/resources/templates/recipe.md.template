@@ -1,0 +1,29 @@
+---
+sidebar_label: "{{sidebarLabel}}"
+title: "{{title}}"
+---
+
+{{tabsImport}}
+
+# {{title}}
+
+**{{longRecipeName}}**
+
+{{description}}
+
+{{#hasTags}}
+### Tags
+
+{{tags}}
+{{/hasTags}}
+{{sourceSection}}
+{{optionsSection}}
+{{definitionSection}}
+{{usedBySection}}
+{{examplesSection}}
+{{usageSection}}
+{{#showPlatformSections}}
+{{platformSection}}
+{{/showPlatformSections}}
+{{dataTablesSection}}
+{{contributorsSection}}

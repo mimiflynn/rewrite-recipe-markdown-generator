@@ -1,0 +1,32 @@
+# {{displayName}}
+
+{{#hasDescription}}
+_{{description}}_
+
+{{/hasDescription}}
+{{#hasSubcategories}}
+## Categories
+
+{{#subcategories}}
+* [{{displayName}}](/recipes/{{path}})
+{{/subcategories}}
+
+{{/hasSubcategories}}
+{{#hasCompositeRecipes}}
+## Composite Recipes
+
+_Recipes that include further recipes, often including the individual recipes below._
+
+{{#compositeRecipes}}
+* [{{displayName}}](./{{localPath}}.md)
+{{/compositeRecipes}}
+
+{{/hasCompositeRecipes}}
+{{#hasNormalRecipes}}
+## Recipes
+
+{{#normalRecipes}}
+* [{{displayName}}](./{{localPath}}.md)
+{{/normalRecipes}}
+
+{{/hasNormalRecipes}}

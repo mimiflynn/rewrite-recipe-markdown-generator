@@ -1,0 +1,10 @@
+
+## See how this recipe works across multiple open-source repositories
+
+{{recipeCalloutImport}}
+
+{{recipeCallout}}
+
+The community edition of the {{platformName}} platform enables you to easily run recipes across thousands of open-source repositories.
+
+Please [contact {{platformName}}]({{contactUrl}}) for more information about safely running the recipes on your own codebase in a private SaaS.

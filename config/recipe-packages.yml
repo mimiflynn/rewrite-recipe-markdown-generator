@@ -1,0 +1,51 @@
+# Recipe Package Configuration
+# Defines how recipe package names map to documentation paths
+
+packageRules:
+  - prefix: "org.openrewrite"
+    stripSegments: 2
+    coreShortPath: true
+  - prefix: "io.moderne"
+    stripSegments: 2
+  - prefix: "ai.timefold"
+    stripSegments: 0
+  - prefix: "com.oracle"
+    stripSegments: 0
+  - prefix: "io.quarkus"
+    stripSegments: 0
+  - prefix: "io.quakus"
+    stripSegments: 0
+  - prefix: "org.apache"
+    stripSegments: 0
+  - prefix: "org.axonframework"
+    stripSegments: 0
+  - prefix: "software.amazon.awssdk"
+    stripSegments: 0
+  - prefix: "tech.picnic"
+    stripSegments: 0
+
+coreLibraries:
+  - rewrite-core
+  - rewrite-gradle
+  - rewrite-groovy
+  - rewrite-hcl
+  - rewrite-java
+  - rewrite-java-test
+  - rewrite-json
+  - rewrite-kotlin
+  - rewrite-maven
+  - rewrite-properties
+  - rewrite-protobuf
+  - rewrite-test
+  - rewrite-toml
+  - rewrite-xml
+  - rewrite-yaml
+
+pathRemappings:
+  "org.openrewrite.java.testing.assertj.Assertj": "java/testing/assertj/assertj-best-practices"
+  "org.openrewrite.java.migrate.javaee7": "java/migrate/javaee7-recipe"
+  "org.openrewrite.java.migrate.javaee8": "java/migrate/javaee8-recipe"
+
+editionSuffixes:
+  "io.moderne.java.spring.boot3.UpgradeSpringBoot_3_4": " (Moderne Edition)"
+  "org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_4": " (Community Edition)"

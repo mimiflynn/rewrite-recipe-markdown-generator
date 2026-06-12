@@ -1,0 +1,15 @@
+<TabItem value="npm" label="npm">
+
+1. Install the recipe package:
+
+```shell title="shell"
+npm install {{packageName}}
+```
+
+2. Run the recipe using the {{cliName}}:
+
+```shell title="shell"
+mod run . --recipe {{trimmedRecipeName}}{{cliOptions}}
+```
+
+</TabItem>

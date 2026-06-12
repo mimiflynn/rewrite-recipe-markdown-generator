@@ -2,12 +2,15 @@
 
 package org.openrewrite
 
+import org.openrewrite.config.BrandingConfig
 import org.openrewrite.config.DeclarativeRecipe
+import org.openrewrite.config.GeneratorConfig
 import org.openrewrite.config.RecipeDescriptor
 import picocli.CommandLine
 import picocli.CommandLine.*
 import picocli.CommandLine.Option
 import java.io.BufferedWriter
+import java.io.File
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
@@ -82,8 +85,17 @@ class RecipeMarkdownGenerator : Runnable {
     @Option(names = ["--latest-versions-only"])
     var latestVersionsOnly: Boolean = false
 
+    @Option(names = ["--config-dir"], description = ["Path to configuration directory containing recipe-packages.yml and branding.yml"])
+    var configDir: String? = null
+
+    @Option(names = ["--templates-dir"], description = ["Path to custom templates directory for markdown generation"])
+    var templatesDir: String? = null
+
     override fun run() {
-        // OpenRewrite docs output (open-source recipes only)
+        // Load configuration
+        val config = GeneratorConfig.load(configDir?.let { File(it) })
+        generatorConfig = config
+
         val outputPath = Paths.get(destinationDirectoryName)
         val recipesPath = outputPath.resolve("recipes")
 
@@ -111,8 +123,7 @@ class RecipeMarkdownGenerator : Runnable {
         recipeLoader.addInfosFromManifests()
 
         // Write latest-versions-of-every-openrewrite-module.md, for all recipe modules
-        val versionWriter = VersionWriter()
-        // OpenRewrite docs
+        val versionWriter = VersionWriter(config.branding)
         versionWriter.createLatestVersionsJs(
             outputPath,
             recipeOrigins.values,
@@ -197,15 +208,29 @@ class RecipeMarkdownGenerator : Runnable {
             }
         }
 
-        // Build set of proprietary recipe names (for cross-reference link handling)
-        val proprietaryRecipeNames = allRecipeDescriptors
-            .filter { recipe ->
-                val source = recipeToSource[recipe.name]
-                val origin = findOrigin(source, recipe.name, recipeOrigins)
-                (origin != null && isModerneDocsOnly(origin)) ||
-                    source?.toString()?.startsWith("typescript-search://") == true ||
-                    source?.toString()?.startsWith("python-search://") == true ||
-                    source?.toString()?.startsWith("csharp-search://") == true
+        // Export JSON before markdown generation
+        val categories = Category.fromDescriptors(allRecipeDescriptors, allCategoryDescriptors)
+            .sortedBy { it.simpleName }
+        val jsonExporter = RecipeJsonExporter(config.recipePackages, config.branding)
+        jsonExporter.export(outputPath, allRecipeDescriptors, recipeOrigins, recipeContainedBy, categories)
+
+        // Create the recipe docs
+        val templateRenderer = TemplateRenderer(templatesDir?.let { File(it) })
+        val recipeMarkdownWriter = RecipeMarkdownWriter(recipeContainedBy, config.branding, templateRenderer)
+        for (recipeDescriptor in allRecipeDescriptors) {
+            var origin: RecipeOrigin?
+            var rawUri = recipeDescriptor.source.toString()
+            val exclamationIndex = rawUri.indexOf('!')
+            if (exclamationIndex == -1) {
+                origin = recipeOrigins[recipeDescriptor.source]
+            } else {
+                // The recipe origin includes the path to the recipe within a jar
+                // Such URIs will look something like: jar:file:/path/to/the/recipes.jar!META-INF/rewrite/some-declarative.yml
+                // Strip the "jar:" prefix and the part of the URI pointing inside the jar
+                rawUri = rawUri.substring(0, exclamationIndex)
+                rawUri = rawUri.substring(4)
+                val jarOnlyUri = URI.create(rawUri)
+                origin = recipeOrigins[jarOnlyUri]
             }
             .map { it.name }
             .toSet()
@@ -263,8 +288,10 @@ class RecipeMarkdownGenerator : Runnable {
                 }
             }
 
-            // Changes something like org.openrewrite.circleci.InstallOrb to https://docs.openrewrite.org/recipes/circleci/installorb
-            val docLink = "https://docs.openrewrite.org/recipes/" + getRecipePath(recipeDescriptor)
+            // Changes something like org.openrewrite.circleci.InstallOrb to {docsBaseUrl}/recipes/circleci/installorb
+            val docLink = "${config.branding.docsBaseUrl}/recipes/" + getRecipePath(recipeDescriptor)
+            val recipeSource = recipeDescriptor.source.toString()
+            var isImperative = true
 
             // Determine if recipe is imperative (Java) or declarative (YAML)
             // Used to help with time spent calculations. Imperative = 12 hours, Declarative = 4 hours
@@ -310,7 +337,7 @@ class RecipeMarkdownGenerator : Runnable {
         }
 
         // Create changelog markdown, and update tracking file
-        ChangelogWriter().createRecipeDescriptorsYaml(
+        ChangelogWriter(config.branding).createRecipeDescriptorsYaml(
             markdownArtifacts,
             openSourceRecipeDescriptors.size,
             rewriteBomVersion,
@@ -318,10 +345,10 @@ class RecipeMarkdownGenerator : Runnable {
         )
 
         // Write lists of recipes into various files
-        // OpenRewrite docs: open-source recipes only (links use /recipes path)
-        val listWriter = ListsOfRecipesWriter(openSourceRecipeDescriptors, outputPath, "/recipes")
-        listWriter.createModerneRecipes(moderneOnlyRecipes.values.flatten(), recipeOrigins, recipeToSource)
-        listWriter.createRecipesWithDataTables(recipeOrigins, recipeToSource)
+        val listWriter = ListsOfRecipesWriter(allRecipeDescriptors, outputPath, config.branding)
+        listWriter.createModerneRecipes(moderneProprietaryRecipes)
+        listWriter.createRecipesWithDataTables()
+        listWriter.createRecipeAuthors()
         listWriter.createRecipesByTag()
         listWriter.createScanningRecipes(
             allRecipes.filter { recipe ->
@@ -373,122 +400,8 @@ class RecipeMarkdownGenerator : Runnable {
 
 
     companion object {
-        /** Modules whose docs should only appear in Moderne docs, regardless of license. */
-        private val MODERNE_DOCS_ONLY_MODULES = setOf("rewrite-devcenter")
-
-        private fun isModerneDocsOnly(origin: RecipeOrigin): Boolean =
-            origin.license == Licenses.Proprietary || origin.artifactId in MODERNE_DOCS_ONLY_MODULES
-
-        // Set of base paths that have both io.moderne and org.openrewrite recipes (conflicts)
-        private var conflictingBasePaths: Set<String> = emptySet()
-
-        /**
-         * Initialize conflict detection by scanning all recipe descriptors.
-         * Must be called before any getRecipePath() calls.
-         */
-        fun initializeConflictDetection(allDescriptors: Collection<RecipeDescriptor>) {
-            val moderneBasePaths = mutableSetOf<String>()
-            val openrewriteBasePaths = mutableSetOf<String>()
-
-            for (descriptor in allDescriptors) {
-                val name = descriptor.name
-                when {
-                    name.startsWith("io.moderne") -> {
-                        moderneBasePaths.add(getBasePath(name))
-                    }
-                    name.startsWith("org.openrewrite") -> {
-                        openrewriteBasePaths.add(getBasePath(name))
-                    }
-                }
-            }
-
-            // Find paths that exist in both sets
-            conflictingBasePaths = moderneBasePaths.intersect(openrewriteBasePaths)
-        }
-
-        fun hasConflict(recipeName: String): Boolean =
-            conflictingBasePaths.contains(getBasePath(recipeName))
-
-        /**
-         * Compute the base path for a recipe name (without any edition suffix).
-         * This is used for conflict detection.
-         */
-        private fun getBasePath(recipeName: String): String {
-            return when {
-                recipeName.startsWith("org.openrewrite") -> {
-                    if (recipeName.count { it == '.' } == 2) {
-                        "core/" + recipeName.substring(16).lowercase(Locale.getDefault())
-                    } else {
-                        recipeName.substring(16).replace('.', '/').lowercase(Locale.getDefault())
-                    }
-                }
-                recipeName.startsWith("io.moderne") -> {
-                    recipeName.substring(11).replace('.', '/').lowercase(Locale.getDefault())
-                }
-                recipeName.startsWith("OpenRewrite.") -> {
-                    "csharp/" + recipeName.substring(12).replace('.', '/').lowercase(Locale.getDefault())
-                }
-                else -> {
-                    recipeName.replace('.', '/').lowercase(Locale.getDefault())
-                }
-            }
-        }
-
-        /**
-         * Find the RecipeOrigin for a given source URI.
-         * Handles TypeScript recipes (typescript-search:// scheme) and JAR recipes.
-         */
-        fun findOrigin(source: URI?, recipeName: String, recipeOrigins: Map<URI, RecipeOrigin>): RecipeOrigin? {
-            if (source == null) return null
-
-            val rawUri = source.toString()
-
-            // Handle TypeScript recipes with custom URI scheme
-            if (rawUri.startsWith("typescript-search://")) {
-                val artifactId = rawUri.substringAfter("typescript-search://").substringBefore("/")
-                return recipeOrigins.values.firstOrNull { it.artifactId == artifactId }
-            }
-
-            // Handle Python recipes with custom URI scheme
-            if (rawUri.startsWith("python-search://")) {
-                val artifactId = rawUri.substringAfter("python-search://").substringBefore("/")
-                return recipeOrigins.values.firstOrNull { it.artifactId == artifactId }
-            }
-
-            // Handle C# recipes with custom URI scheme
-            if (rawUri.startsWith("csharp-search://")) {
-                val artifactId = rawUri.substringAfter("csharp-search://").substringBefore("/")
-                return recipeOrigins.values.firstOrNull { it.artifactId == artifactId }
-            }
-
-            // Handle JAR URIs (e.g., jar:file:/path/to/recipes.jar!META-INF/rewrite/some.yml)
-            val exclamationIndex = rawUri.indexOf('!')
-            val origin = if (exclamationIndex == -1) {
-                recipeOrigins[source]
-            } else {
-                // Strip the "jar:" prefix and the part after the "!"
-                val jarOnlyUri = URI.create(rawUri.substring(4, exclamationIndex))
-                recipeOrigins[jarOnlyUri]
-            }
-
-            if (origin == null) return null
-
-            // When multiple JARs share the same artifactId (e.g. org.openrewrite.recipe:rewrite-prethink and
-            // io.moderne.recipe:rewrite-prethink), the recipe may have been loaded from the wrong JAR due to
-            // classloader ordering. Prefer the origin whose groupId prefix matches the recipe name's package prefix.
-            val recipePrefix = recipeName.substringBeforeLast('.')
-            val originGroupPrefix = origin.groupId.substringBeforeLast('.')
-            if (!recipePrefix.startsWith(originGroupPrefix)) {
-                val betterOrigin = recipeOrigins.values.firstOrNull {
-                    it.artifactId == origin.artifactId && recipePrefix.startsWith(it.groupId.substringBeforeLast('.'))
-                }
-                if (betterOrigin != null) {
-                    return betterOrigin
-                }
-            }
-
-            return origin
-        }
+        // Mutable config reference for use in static getRecipePath method
+        internal var generatorConfig: GeneratorConfig = GeneratorConfig()
 
         /**
          * Call Closable.use() together with apply() to avoid adding two levels of indentation
@@ -500,67 +413,49 @@ class RecipeMarkdownGenerator : Runnable {
             newLine()
         }
 
-        // Docusaurus expects that if a file is called "assertj" inside of the folder "assertj" that it's the
-        // README for said folder. Due to how generic we've made this recipe name, we need to change it for the
-        // docs so that they parse correctly.
+        /**
+         * Converts a recipe name to its documentation path using configured package rules.
+         */
         fun getRecipePath(recipe: RecipeDescriptor): String {
-            // Check for manual overrides first
-            if (recipePathToDocusaurusRenamedPath.containsKey(recipe.name)) {
-                return recipePathToDocusaurusRenamedPath[recipe.name]!!
-            }
+            val packageConfig = generatorConfig.recipePackages
 
-            val basePath = getBasePath(recipe.name)
-
-            // Docusaurus treats a file with the same name as its parent directory as the
-            // directory index (e.g., codequality/codequality.md -> /codequality/ route),
-            // which collides with the category README.md. Rename such recipes.
-            val lastSlash = basePath.lastIndexOf('/')
-            if (lastSlash > 0) {
-                val parentDir = basePath.substring(basePath.lastIndexOf('/', lastSlash - 1) + 1, lastSlash)
-                val leaf = basePath.substring(lastSlash + 1)
-                if (parentDir == leaf) {
-                    return basePath + "-recipe"
-                }
-            }
-
-            // Add edition suffix only if there's a detected conflict
-            val needsSuffix = conflictingBasePaths.contains(basePath)
-
-            return when {
-                recipe.name.startsWith("org.openrewrite") -> {
-                    if (needsSuffix) basePath + "-community-edition" else basePath
-                }
-                recipe.name.startsWith("io.moderne") -> {
-                    if (needsSuffix) basePath + "-moderne-edition" else basePath
-                }
-                recipe.name.startsWith("OpenRewrite.") -> {
-                    basePath
-                }
-                recipe.name.startsWith("ai.timefold") ||
-                recipe.name.startsWith("androidx") ||
-                recipe.name.startsWith("com.google") ||
-                recipe.name.startsWith("com.oracle") ||
-                recipe.name.startsWith("io.axoniq") ||
-                recipe.name.startsWith("io.quarkus") ||
-                recipe.name.startsWith("io.quakus") ||
-                recipe.name.startsWith("org.apache") ||
-                recipe.name.startsWith("org.axonframework") ||
-                recipe.name.startsWith("org.jetbrains") ||
-                recipe.name.startsWith("software.amazon.awssdk") ||
-                recipe.name.startsWith("tech.picnic") -> {
-                    basePath
-                }
-                else -> {
-                    throw RuntimeException("Recipe package unrecognized: ${recipe.name}")
-                }
+            // Check path remappings first
+            if (packageConfig.pathRemappings.containsKey(recipe.name)) {
+                return packageConfig.pathRemappings[recipe.name]!!
             }
         }
 
-        private val recipePathToDocusaurusRenamedPath: Map<String, String> = mapOf(
-            "org.openrewrite.java.testing.assertj.Assertj" to "java/testing/assertj/assertj-best-practices",
-            "org.openrewrite.java.migrate.javaee7" to "java/migrate/javaee7-recipe",
-            "org.openrewrite.java.migrate.javaee8" to "java/migrate/javaee8-recipe"
-        )
+            // Check edition suffixes for path disambiguation
+            val editionSuffixes = packageConfig.editionSuffixes
+            if (recipe.name == "io.moderne.java.spring.boot3.UpgradeSpringBoot_3_4") {
+                return "java/spring/boot3/upgradespringboot_3_4-moderne-edition"
+            } else if (recipe.name == "org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_4") {
+                return "java/spring/boot3/upgradespringboot_3_4-community-edition"
+            }
+
+            // Iterate through configured package rules
+            for (rule in packageConfig.packageRules) {
+                if (recipe.name.startsWith(rule.prefix)) {
+                    return when {
+                        rule.coreShortPath && recipe.name.count { it == '.' } == 2 -> {
+                            val stripped = recipe.name.substring(rule.prefix.length + 1)
+                            "core/" + stripped.lowercase(Locale.getDefault())
+                        }
+                        rule.stripSegments == 0 -> {
+                            recipe.name.replace("\\.".toRegex(), "/").lowercase(Locale.getDefault())
+                        }
+                        else -> {
+                            // Strip the configured number of segments
+                            val parts = recipe.name.split(".")
+                            val stripped = parts.drop(rule.stripSegments).joinToString("/")
+                            (rule.pathPrefix + stripped).lowercase(Locale.getDefault())
+                        }
+                    }
+                }
+            }
+
+            throw RuntimeException("Recipe package unrecognized: ${recipe.name}")
+        }
 
         @JvmStatic
         fun main(args: Array<String>) {
