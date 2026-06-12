@@ -1,0 +1,15 @@
+<TabItem value="pip" label="pip">
+
+1. Install the recipe package:
+
+```shell title="shell"
+pip install {{packageName}}
+```
+
+2. Run the recipe using the {{cliName}}:
+
+```shell title="shell"
+mod run . --recipe {{trimmedRecipeName}}{{cliOptions}}
+```
+
+</TabItem>

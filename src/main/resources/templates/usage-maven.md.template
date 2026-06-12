@@ -1,0 +1,35 @@
+<TabItem value="maven" label="Maven">
+
+1. Add the following to your `pom.xml` file:
+
+```xml title="pom.xml"
+<project>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.openrewrite.maven</groupId>
+        <artifactId>rewrite-maven-plugin</artifactId>
+        <version>{{mavenPluginVersion}}</version>
+        <configuration>
+          {{dataTableSnippet}}
+          <activeRecipes>
+            <recipe>{{recipeName}}</recipe>
+          </activeRecipes>
+        </configuration>
+{{#requiresDependency}}
+        <dependencies>
+          <dependency>
+            <groupId>{{groupId}}</groupId>
+            <artifactId>{{artifactId}}</artifactId>
+            <version>{{versionPlaceholder}}</version>
+          </dependency>
+        </dependencies>
+{{/requiresDependency}}
+      </plugin>
+    </plugins>
+  </build>
+</project>
+```
+
+2. Run `mvn rewrite:run` to run the recipe.
+</TabItem>

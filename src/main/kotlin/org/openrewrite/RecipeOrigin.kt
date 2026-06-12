@@ -1,5 +1,7 @@
 package org.openrewrite
 
+import org.openrewrite.config.Ecosystem
+import org.openrewrite.config.RecipePackageConfig
 import java.net.URI
 import java.nio.file.Paths
 import java.util.regex.Pattern
@@ -12,15 +14,25 @@ class RecipeOrigin(
 ) {
     var repositoryUrl: String = ""
     var license: License = Licenses.Unknown
+
     /**
      * The build plugins automatically have dependencies on the core libraries.
      * It isn't necessary to explicitly take dependencies on the core libraries to access their recipes.
      * So explicit dependencies are only necessary when this returns "false"
      */
-    fun isFromCoreLibrary() = repositoryUrl.startsWith("https://github.com/openrewrite/rewrite/")
+    fun isFromCoreLibrary(): Boolean {
+        val coreLibs = RecipeMarkdownGenerator.generatorConfig.recipePackages.coreLibraries
+        return groupId == "org.openrewrite" && coreLibs.contains(artifactId)
+    }
 
+    /**
+     * Detect the ecosystem for this origin based on artifact metadata.
+     */
+    fun detectEcosystem(recipeName: String): Ecosystem {
+        return Ecosystem.detect(recipeName, artifactId)
+    }
 
-    private fun convertNameToJavaPath(recipeName: String): String {
+    private fun convertNameToSourcePath(recipeName: String, ecosystem: Ecosystem): String {
         // These recipes are not Refaster recipes and should keep
         // Recipe or Recipes in their name when linking to them.
         val recipesToNotReplace = listOf(
@@ -33,75 +45,47 @@ class RecipeOrigin(
 
         val updatedRecipeName = recipeName.replace('.', '/')
 
-        return if (recipesToNotReplace.contains(recipeName)) {
-            "$updatedRecipeName.java"
-        } else {
-            updatedRecipeName
-                .replace(Regex("\\$.*"), "")
-                .replace(Regex("Recipes?$"), "") + ".java"
+        return when (ecosystem) {
+            Ecosystem.JAVA -> {
+                if (recipesToNotReplace.contains(recipeName)) {
+                    "$updatedRecipeName.java"
+                } else {
+                    updatedRecipeName
+                        .replace(Regex("\\$.*"), "")
+                        .replace(Regex("Recipes?$"), "") + ".java"
+                }
+            }
+            Ecosystem.PYTHON -> {
+                updatedRecipeName
+                    .replace(Regex("\\$.*"), "") + ".py"
+            }
+            Ecosystem.JAVASCRIPT -> {
+                updatedRecipeName
+                    .replace(Regex("\\$.*"), "") + ".ts"
+            }
+            Ecosystem.CSHARP -> {
+                updatedRecipeName
+                    .replace(Regex("\\$.*"), "") + ".cs"
+            }
         }
     }
 
     fun githubUrl(recipeName: String, source: URI): String {
-        //todo we can remove this I think, as third party recipes can now define their very own License
         if (artifactId == "rewrite-third-party") {
             return "https://github.com/search?type=code&q=$recipeName"
         }
 
         val sourceString = source.toString()
 
-        // TypeScript recipes use GitHub search URLs because recipe names don't directly map to file paths
-        // typescript-search://rewrite-nodejs/org.openrewrite.node.migrate.util.use-native-type-checking-methods
-        return when {
-            sourceString.startsWith("typescript-search://") -> {
-                // Extract the recipe name and use GitHub code search
-                val searchRecipeName = sourceString.substringAfter("typescript-search://$artifactId/")
-                // Extract just the owner/repo part (e.g., "openrewrite/rewrite" from "https://github.com/openrewrite/rewrite/blob/main/")
-                val repoPath = repositoryUrl
-                    .substringAfter("github.com/")
-                    .substringBefore("/blob/")
-                    .substringBefore("/tree/")
-                    .removeSuffix("/")
-                "https://github.com/search?type=code&q=repo:${repoPath}+${searchRecipeName}"
-            }
-            sourceString.startsWith("python-search://") -> {
-                val searchRecipeName = sourceString.substringAfter("python-search://$artifactId/")
-                val repoPath = repositoryUrl
-                    .substringAfter("github.com/")
-                    .substringBefore("/blob/")
-                    .substringBefore("/tree/")
-                    .removeSuffix("/")
-                "https://github.com/search?type=code&q=repo:${repoPath}+${searchRecipeName}"
-            }
-            sourceString.startsWith("csharp-search://") -> {
-                val searchRecipeName = sourceString.substringAfter("csharp-search://$artifactId/")
-                val repoPath = repositoryUrl
-                    .substringAfter("github.com/")
-                    .substringBefore("/blob/")
-                    .substringBefore("/tree/")
-                    .removeSuffix("/")
-                "https://github.com/search?type=code&q=repo:${repoPath}+${searchRecipeName}"
-            }
-            // YAML recipes will have a source that ends with META-INF/rewrite/something.yml
-            sourceString.endsWith(".yml") -> {
-                val ymlPath = sourceString.substring(source.toString().lastIndexOf("META-INF"))
-                // For multi-module projects (core libraries), include the module subdirectory
-                if (isFromCoreLibrary()) {
-                    "${repositoryUrl.removeSuffix("/")}/${artifactId}/src/main/resources/${ymlPath.removePrefix("/")}"
-                } else {
-                    "${repositoryUrl.removeSuffix("/")}/src/main/resources/${ymlPath.removePrefix("/")}"
-                }
-            }
-            // Java recipes
-            else -> {
-                val javaPath = convertNameToJavaPath(recipeName)
-                // For multi-module projects (core libraries), include the module subdirectory
-                if (isFromCoreLibrary()) {
-                    "${repositoryUrl.removeSuffix("/")}/${artifactId}/src/main/java/${javaPath.removePrefix("/")}"
-                } else {
-                    "${repositoryUrl.removeSuffix("/")}/src/main/java/${javaPath.removePrefix("/")}"
-                }
-            }
+        // YAML recipes will have a source that ends with META-INF/rewrite/something.yml
+        return if (sourceString.substring(sourceString.length - 3) == "yml") {
+            val ymlPath = sourceString.substring(source.toString().lastIndexOf("META-INF"))
+            "${repositoryUrl.removeSuffix("/")}/src/main/resources/${ymlPath.removePrefix("/")}"
+        } else {
+            val ecosystem = detectEcosystem(recipeName)
+            val sourcePath = convertNameToSourcePath(recipeName, ecosystem)
+            val sourceDir = ecosystem.sourcePathPrefix
+            "${repositoryUrl.removeSuffix("/")}/${sourceDir}${sourcePath.removePrefix("/")}"
         }
     }
 
@@ -111,7 +95,6 @@ class RecipeOrigin(
         .replace('.', '_')
 
     fun issueTrackerUrl() = repositoryUrl.replace(Regex("/blob/main/.*"), "/issues")
-    fun releaseUrl(version: String) = repositoryUrl.replace(Regex("/blob/main/.*"), "/releases/tag/${version}")
 
     companion object {
         private val parsePattern = Pattern.compile("([^:]+):([^:]+):([^:]+):(.+)")
@@ -119,11 +102,7 @@ class RecipeOrigin(
         fun fromString(encoded: String): RecipeOrigin {
             val m = parsePattern.matcher(encoded)
             require(m.matches()) { "Couldn't parse as a RecipeOrigin: $encoded" }
-            return RecipeOrigin(
-                m.group(1),
-                m.group(2),
-                m.group(3),
-                Paths.get(m.group(4)).toUri())
+            return RecipeOrigin(m.group(1), m.group(2), m.group(3), Paths.get(m.group(4)).toUri())
         }
 
         fun parse(text: String): Map<URI, RecipeOrigin> {
